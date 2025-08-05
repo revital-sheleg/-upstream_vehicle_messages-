@@ -1,0 +1,341 @@
+{
+  "$schema": "./config_schema.json",
+  "data_lake": {
+    "name": "upstream",
+    "base_path": "data_lake",
+    "default_format": "parquet"
+  },
+  "tables": [
+    {
+      "table_name": "vehicle_messages",
+      "api_source": {
+        "url": "http://localhost:9900/upstream/vehicle_messages?amount=10000"
+      },
+      "schema": [
+        {
+          "name": "vin",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "name": "manufacturer",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "year",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "latitude",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "longitude",
+          "type": "double",
+          "nullable": true
+        },
+        {
+          "name": "timestamp",
+          "type": "long",
+          "nullable": false
+        },
+        {
+          "name": "velocity",
+          "type": "integer",
+          "nullable": true
+        }
+      ],
+      "paths": {
+        "bronze": "./bronze/vehicle_messages",
+        "silver": "./silver/vehicle_messages",
+        "gold": "./gold/vehicle_messages",
+        "reporting": "../reporting/vehicle_messages"
+      },
+      "bronze": {
+        "description": "Raw data ingestion layer",
+        "format": "parquet",
+        "catalog": "example_name",
+        "partitioning": {
+          "enabled": true,
+          "columns": [
+            "date",
+            "hour"
+          ],
+          "strategy": "directory"
+        },
+        "cleaning": {
+          "enabled": false,
+          "rules": []
+        },
+        "schema": {
+          "auto_detect": true,
+          "enforce": false
+        },
+        "path": "./bronze/vehicle_messages"
+      },
+      "silver": {
+        "description": "Cleaned and standardized data layer",
+        "format": "parquet",
+        "partitioning": {
+          "enabled": true,
+          "columns": [
+            "date",
+            "hour"
+          ],
+          "strategy": "directory"
+        },
+        "cleaning": {
+          "enabled": true,
+          "rules": [
+            {
+              "type": "trim_strings",
+              "columns": [
+                "manufacturer"
+              ],
+              "description": "Remove trailing spaces from manufacturer names"
+            },
+            {
+              "type": "filter_nulls",
+              "columns": [
+                "vin"
+              ],
+              "description": "Remove records with null VIN values"
+            },
+            {
+              "type": "standardize_gear",
+              "columns": [
+                "gearPosition"
+              ],
+              "description": "Convert gear positions to integers only",
+              "method": "extract_numeric"
+            }
+          ]
+        },
+        "schema": {
+          "auto_detect": false,
+          "enforce": true,
+          "evolution": true
+        }
+      },
+      "gold": {
+        "description": "Aggregated data tables for analytics",
+        "format": "parquet",
+        "partitioning": {
+          "enabled": false,
+          "columns": [],
+          "strategy": "none"
+        },
+        "cleaning": {
+          "enabled": false,
+          "rules": []
+        },
+        "schema": {
+          "auto_detect": false,
+          "enforce": true,
+          "evolution": false
+        }
+      },
+      "reporting": {
+        "description": "Business reports and dashboards",
+        "format": "parquet",
+        "partitioning": {
+          "enabled": false,
+          "columns": [],
+          "strategy": "none"
+        },
+        "cleaning": {
+          "enabled": false,
+          "rules": []
+        },
+        "schema": {
+          "auto_detect": false,
+          "enforce": true,
+          "evolution": false
+        }
+      }
+    }
+  ],
+  "formats": {
+    "parquet": {
+      "compression": "snappy",
+      "row_group_size": 128000,
+      "page_size": 1024000,
+      "write_statistics": true
+    },
+    "iceberg": {
+      "catalog_type": "filesystem",
+      "catalog_config": {
+        "warehouse": "./data_lake/iceberg_warehouse"
+      },
+      "table_properties": {
+        "write.format.default": "parquet",
+        "write.parquet.compression-codec": "snappy"
+      },
+      "partition_spec": {
+        "transform": "identity"
+      }
+    }
+  },
+  "cleaning_methods": {
+    "trim_strings": {
+      "description": "Remove leading and trailing whitespace",
+      "function": "str.strip"
+    },
+    "filter_nulls": {
+      "description": "Remove rows with null values in specified columns",
+      "function": "dropna"
+    },
+    "standardize_gear": {
+      "description": "Standardize gear position values",
+      "method": "extract_numeric",
+      "regex": "\\d+",
+      "default_value": null
+    },
+    "normalize_case": {
+      "description": "Normalize string case",
+      "options": [
+        "upper",
+        "lower",
+        "title"
+      ]
+    },
+    "validate_range": {
+      "description": "Validate numeric values within range",
+      "min_value": null,
+      "max_value": null
+    }
+  },
+  "partitioning_strategies": {
+    "directory": {
+      "description": "Directory-based partitioning (Hive-style)",
+      "format": "{column}={value}"
+    },
+    "metadata": {
+      "description": "Metadata-based partitioning (Iceberg-style)",
+      "transforms": [
+        "identity",
+        "bucket",
+        "truncate",
+        "year",
+        "month",
+        "day",
+        "hour"
+      ]
+    },
+    "none": {
+      "description": "No partitioning"
+    }
+  },
+  "gold_tables": {
+    "vehicle_states_agg": {
+      "description": "Aggregated vehicle states by hour",
+      "source_layer": "silver",
+      "output_format": "parquet",
+      "aggregation_type": "group_by",
+      "group_by": [
+        "vin",
+        "date",
+        "hour"
+      ],
+      "aggregations": {
+        "avg_velocity": "mean",
+        "max_velocity": "max",
+        "min_velocity": "min",
+        "total_messages": "count",
+        "last_timestamp": "max"
+      }
+    },
+    "hourly_fleet_summary": {
+      "description": "Fleet-wide hourly summary statistics",
+      "source_layer": "silver",
+      "output_format": "parquet",
+      "aggregation_type": "group_by",
+      "group_by": [
+        "date",
+        "hour"
+      ],
+      "aggregations": {
+        "total_vehicles": "nunique",
+        "avg_fleet_velocity": "mean",
+        "max_fleet_velocity": "max",
+        "total_messages": "count"
+      }
+    }
+  },
+  "reports": {
+    "vin_last_state": {
+      "description": "Last reported state for each VIN",
+      "source_layer": "gold",
+      "source_table": "vehicle_states_agg",
+      "output_format": "csv",
+      "report_type": "detail",
+      "columns": [
+        "vin",
+        "last_timestamp",
+        "max_velocity"
+      ]
+    },
+    "fastest_vehicles_per_hour": {
+      "description": "Top fastest vehicles per hour",
+      "source_layer": "gold",
+      "source_table": "vehicle_states_agg",
+      "output_format": "csv",
+      "report_type": "top_n",
+      "group_by": [
+        "date",
+        "hour"
+      ],
+      "top_n": 10,
+      "order_by": "max_velocity",
+      "columns": [
+        "date",
+        "hour",
+        "vin",
+        "max_velocity"
+      ]
+    },
+    "fleet_performance_dashboard": {
+      "description": "Fleet performance metrics dashboard",
+      "source_layer": "gold",
+      "source_table": "hourly_fleet_summary",
+      "output_format": "csv",
+      "report_type": "dashboard",
+      "columns": [
+        "date",
+        "hour",
+        "total_vehicles",
+        "avg_fleet_velocity",
+        "max_fleet_velocity",
+        "total_messages"
+      ]
+    }
+  },
+  "security": {
+    "sql_injection_detection": {
+      "enabled": true,
+      "target_layers": [
+        "bronze"
+      ],
+      "columns": [
+        "vin"
+      ],
+      "patterns": [
+        "('(''|[^'])*')|(;)|(\\b(ALTER|CREATE|DELETE|DROP|EXEC(UTE){0,1}|INSERT( +INTO){0,1}|MERGE|SELECT|UPDATE|UNION( +ALL){0,1})\\b)"
+      ]
+    }
+  },
+  "performance": {
+    "batch_size": 10000,
+    "parallel_processing": false,
+    "memory_limit": "1GB",
+    "cache_enabled": true
+  }
+}

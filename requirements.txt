@@ -1,0 +1,29 @@
+# Core dependencies for Generic Data Lake
+pandas==2.1.4
+pyarrow==14.0.2
+requests==2.31.0
+
+# Optional dependencies (commented out - uncomment if needed)
+
+# Development tools
+# black==23.7.0
+# flake8==6.0.0
+# pytest==7.4.0
+# mypy==1.5.1
+
+# Data analysis and visualization
+# jupyter==1.0.0
+# matplotlib==3.7.2
+# seaborn==0.12.2
+# plotly==5.15.0
+
+# Additional data formats
+# openpyxl==3.1.2
+# xlsxwriter==3.1.2
+
+# Performance monitoring
+# psutil==5.9.5
+# memory-profiler==0.61.0
+
+# Apache Iceberg support (if needed in future)
+# pyiceberg[s3fs,hive]==0.6.1
