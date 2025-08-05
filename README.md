@@ -94,7 +94,7 @@ The table-based data lake follows a layered architecture:
 
 - **Bronze Layer**: Raw ingested data in original format
 - **Silver Layer**: Cleaned and transformed data with applied business rules
-- **Gold Layer**: Aggregated tables optimized for analytics
+- **Gold Layer**: Aggregated tables optimized for analytics. Can hold longer period\ scope than report **Consider Retention here
 - **Reporting**: Business reports in CSV/JSON format (including security report)
 
 ## Considerations and Future Improvements 
